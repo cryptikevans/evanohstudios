@@ -1,8 +1,0 @@
-[functions.mpesa-stk-push]
-verify_jwt = false
-[functions.mpesa-callback]
-verify_jwt = false
-[functions.payment-status]
-verify_jwt = false
-[ticket-status]
-verify_jwt = false
