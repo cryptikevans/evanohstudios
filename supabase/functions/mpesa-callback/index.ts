@@ -1,3 +1,147 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-const ts=()=>{let p=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(new Date()),o=Object.fromEntries(p.map(x=>[x.type,x.value]));return`${o.year}${o.month}${o.day}${o.hour}${o.minute}${o.second}`};
-Deno.serve(async req=>{try{let j=await req.json(),c=j?.Body?.stkCallback;if(!c)return new Response('ok');let db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!),p=(await db.from('payments').select('*').eq('checkout_request_id',c.CheckoutRequestID).maybeSingle()).data;if(!p)return new Response('ok');if(c.ResultCode!==0){await db.from('payments').update({status:'cancelled'}).eq('id',p.id);return new Response('ok')};let env=Deno.env.get('MPESA_ENV')||'sandbox',base=env==='production'?'https://api.safaricom.co.ke':'https://sandbox.safaricom.co.ke',a=btoa(`${Deno.env.get('MPESA_CONSUMER_KEY')}:${Deno.env.get('MPESA_CONSUMER_SECRET')}`),ar=await fetch(`${base}/oauth/v1/generate?grant_type=client_credentials`,{headers:{Authorization:`Basic ${a}`}}),aj=await ar.json(),t=ts(),sc=Deno.env.get('MPESA_SHORTCODE')!,pw=btoa(`${sc}${Deno.env.get('MPESA_PASSKEY')}${t}`),qr=await fetch(`${base}/mpesa/stkpushquery/v1/query`,{method:'POST',headers:{Authorization:`Bearer ${aj.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:sc,Password:pw,Timestamp:t,CheckoutRequestID:c.CheckoutRequestID})}),q=await qr.json();if(q.ResultCode!==0){await db.from('payments').update({status:'failed'}).eq('id',p.id);return new Response('ok')};let item=c.CallbackMetadata?.Item||[],receipt=item.find(x=>x.Name==='MpesaReceiptNumber')?.Value,code='EVN-'+crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase();await db.from('payments').update({status:'paid',mpesa_receipt:receipt??null,ticket_code:code,paid_at:new Date().toISOString()}).eq('id',p.id);return new Response('ok')}catch(e){console.error(e);return new Response('ok')}});
+
+Deno.serve(async (req) => {
+  try {
+    const body = await req.json();
+
+    console.log("M-PESA CALLBACK RECEIVED");
+    console.log(JSON.stringify(body));
+
+    const callback = body?.Body?.stkCallback;
+
+    if (!callback) {
+      console.log("No stkCallback found");
+      return new Response("OK", { status: 200 });
+    }
+
+    const checkoutRequestId = String(callback.CheckoutRequestID || "");
+    const resultCode = Number(callback.ResultCode);
+
+    console.log("CheckoutRequestID:", checkoutRequestId);
+    console.log("ResultCode:", resultCode);
+
+    if (!checkoutRequestId) {
+      console.log("Missing CheckoutRequestID");
+      return new Response("OK", { status: 200 });
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Find the payment created when the STK Push was initiated
+    const { data: payment, error: findError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("checkout_request_id", checkoutRequestId)
+      .maybeSingle();
+
+    if (findError) {
+      console.error("PAYMENT LOOKUP ERROR:", findError);
+      return new Response("OK", { status: 200 });
+    }
+
+    if (!payment) {
+      console.error(
+        "NO PAYMENT FOUND FOR CHECKOUT REQUEST:",
+        checkoutRequestId
+      );
+
+      return new Response("OK", { status: 200 });
+    }
+
+    console.log("Payment found:", payment.id);
+    console.log("Current payment status:", payment.status);
+
+    // Prevent duplicate callbacks from generating another ticket
+    if (payment.status === "paid") {
+      console.log("Payment already marked as paid");
+      return new Response("OK", { status: 200 });
+    }
+
+    // Payment failed / cancelled / timed out
+    if (resultCode !== 0) {
+      console.log("M-PESA PAYMENT NOT SUCCESSFUL:", resultCode);
+
+      const { error: failedError } = await supabase
+        .from("payments")
+        .update({
+          status: "cancelled"
+        })
+        .eq("id", payment.id);
+
+      if (failedError) {
+        console.error("FAILED PAYMENT UPDATE ERROR:", failedError);
+      } else {
+        console.log("Payment marked as cancelled");
+      }
+
+      return new Response("OK", { status: 200 });
+    }
+
+    // Successful payment
+    const items = callback.CallbackMetadata?.Item || [];
+
+    console.log("Callback metadata:", JSON.stringify(items));
+
+    const receipt =
+      items.find(
+        (item: any) => item.Name === "MpesaReceiptNumber"
+      )?.Value ?? null;
+
+    const amount =
+      items.find(
+        (item: any) => item.Name === "Amount"
+      )?.Value ?? null;
+
+    const phone =
+      items.find(
+        (item: any) => item.Name === "PhoneNumber"
+      )?.Value ?? null;
+
+    console.log("M-PESA RECEIPT:", receipt);
+    console.log("AMOUNT:", amount);
+    console.log("PHONE:", phone);
+
+    const ticketCode =
+      "EVN-" +
+      crypto
+        .randomUUID()
+        .replaceAll("-", "")
+        .slice(0, 10)
+        .toUpperCase();
+
+    const { data: updatedPayment, error: updateError } = await supabase
+      .from("payments")
+      .update({
+        status: "paid",
+        mpesa_receipt: receipt,
+        ticket_code: ticketCode,
+        paid_at: new Date().toISOString()
+      })
+      .eq("id", payment.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("PAYMENT UPDATE ERROR:", updateError);
+      return new Response("OK", { status: 200 });
+    }
+
+    console.log("================================");
+    console.log("PAYMENT SUCCESSFULLY UPDATED");
+    console.log("Payment ID:", updatedPayment.id);
+    console.log("Receipt:", receipt);
+    console.log("Ticket:", ticketCode);
+    console.log("================================");
+
+    return new Response("OK", { status: 200 });
+
+  } catch (error) {
+    console.error("CALLBACK ERROR:", error);
+
+    // Always acknowledge Safaricom's callback
+    return new Response("OK", { status: 200 });
+  }
+});
