@@ -1,0 +1,17 @@
+create extension if not exists pgcrypto;
+create table if not exists public.admin_users(user_id uuid primary key references auth.users(id) on delete cascade,created_at timestamptz default now());
+create table if not exists public.mixes(id uuid primary key default gen_random_uuid(),title text not null,description text,audio_path text not null,cover_path text,published boolean default true,created_at timestamptz default now());
+create table if not exists public.events(id uuid primary key default gen_random_uuid(),name text not null,event_type text not null,event_date date not null,venue text not null,ticket_price numeric(12,2) not null,description text not null,poster_path text not null,published boolean default true,created_at timestamptz default now());
+create table if not exists public.booking_requests(id uuid primary key default gen_random_uuid(),name text not null,contact text not null,event_date date not null,event_type text not null,venue text not null,details text not null,created_at timestamptz default now());
+create table if not exists public.payments(id uuid primary key default gen_random_uuid(),event_id uuid references public.events(id) on delete restrict,quantity int check(quantity between 1 and 20),amount numeric(12,2),phone text,merchant_request_id text,checkout_request_id text,mpesa_receipt text,status text default 'pending',ticket_code text unique,created_at timestamptz default now(),paid_at timestamptz);
+alter table public.admin_users enable row level security;alter table public.mixes enable row level security;alter table public.events enable row level security;alter table public.booking_requests enable row level security;alter table public.payments enable row level security;
+create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $$select exists(select 1 from public.admin_users where user_id=auth.uid())$$;
+create policy "read published mixes" on public.mixes for select using(published or public.is_admin());create policy "admin mixes" on public.mixes for all using(public.is_admin()) with check(public.is_admin());
+create policy "read published events" on public.events for select using(published or public.is_admin());create policy "admin events" on public.events for all using(public.is_admin()) with check(public.is_admin());
+create policy "public booking insert" on public.booking_requests for insert with check(true);create policy "admin booking read" on public.booking_requests for select using(public.is_admin());
+create policy "admin payments" on public.payments for select using(public.is_admin());
+insert into storage.buckets(id,name,public) values('mixes','mixes',true),('covers','covers',true),('event-posters','event-posters',true) on conflict(id) do update set public=true;
+create policy "public media read" on storage.objects for select using(bucket_id in('mixes','covers','event-posters'));
+create policy "admin media insert" on storage.objects for insert with check(bucket_id in('mixes','covers','event-posters') and public.is_admin());
+create policy "admin media update" on storage.objects for update using(bucket_id in('mixes','covers','event-posters') and public.is_admin());
+create policy "admin media delete" on storage.objects for delete using(bucket_id in('mixes','covers','event-posters') and public.is_admin());
