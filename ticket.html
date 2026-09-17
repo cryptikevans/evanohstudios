@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ticket | Selekta Evanoh</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="ticket-page">
+  <main class="ticket-shell">
+    <a class="ticket-back" href="index.html#events">← Back to events</a>
+
+    <section id="ticketCard" class="ticket-card" aria-live="polite">
+      <div class="ticket-top">
+        <div>
+          <small>SELEKTA EVANOH • LIFE OF THE PARTY</small>
+          <div id="ticketStatus" class="ticket-status checking">VERIFYING TICKET…</div>
+        </div>
+        <div class="ticket-mark">EVN</div>
+      </div>
+
+      <div id="ticketContent" class="ticket-loading">
+        <div class="ticket-spinner"></div>
+        <p>Checking your ticket…</p>
+      </div>
+    </section>
+
+    <p class="ticket-note">Keep this ticket on your phone and present the QR code at the entrance.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="ticket.js"></script>
+</body>
+</html>
