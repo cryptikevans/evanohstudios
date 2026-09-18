@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
       .trim()
       .toUpperCase();
 
+    console.log("RECOVERY RECEIPT:", receipt);
+
     if (!receipt || receipt.length < 5 || receipt.length > 30) {
       return json(
         { error: "Enter a valid M-Pesa transaction code." },
@@ -41,6 +43,8 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!url || !key) {
+      console.error("Missing Supabase environment variables.");
+
       return json(
         { error: "Server configuration error." },
         500
@@ -57,7 +61,23 @@ Deno.serve(async (req) => {
         "id,event_id,quantity,amount,status,mpesa_receipt,ticket_code,paid_at"
       )
       .eq("mpesa_receipt", receipt)
+      .limit(1)
       .maybeSingle();
+
+    console.log(
+      "PAYMENT FOUND:",
+      payment
+        ? {
+            id: payment.id,
+            event_id: payment.event_id,
+            status: payment.status,
+            ticket_code: payment.ticket_code,
+            mpesa_receipt: payment.mpesa_receipt
+          }
+        : null
+    );
+
+    console.log("PAYMENT ERROR:", error);
 
     if (error) {
       console.error("Payment lookup error:", error);
@@ -80,6 +100,8 @@ Deno.serve(async (req) => {
 
     // Payment exists, but is not yet confirmed.
     if (payment.status !== "paid") {
+      console.log("PAYMENT STATUS:", payment.status);
+
       return json({
         status: payment.status || "pending",
         message:
@@ -89,6 +111,8 @@ Deno.serve(async (req) => {
 
     // Payment is confirmed but ticket hasn't been generated.
     if (!payment.ticket_code) {
+      console.log("PAID PAYMENT HAS NO TICKET CODE.");
+
       return json({
         status: "paid",
         message:
@@ -106,6 +130,9 @@ Deno.serve(async (req) => {
         .eq("id", payment.event_id)
         .maybeSingle();
 
+      console.log("EVENT FOUND:", data);
+      console.log("EVENT ERROR:", eventError);
+
       if (eventError) {
         console.error("Event lookup error:", eventError);
       }
@@ -113,19 +140,10 @@ Deno.serve(async (req) => {
       event = data;
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * We return the EXISTING ticket code.
-     *
-     * We do NOT create another payment.
-     * We do NOT create another ticket.
-     * We do NOT return an event payment URL.
-     *
-     * The frontend uses this ticket code to open:
-     *
-     * ticket.html?code=EVN-XXXXXXXXXX
-     */
+    console.log(
+      "RECOVERY SUCCESS - TICKET:",
+      payment.ticket_code
+    );
 
     return json({
       ok: true,
