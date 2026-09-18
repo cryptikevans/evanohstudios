@@ -6,3 +6,5 @@ verify_jwt = false
 verify_jwt = false
 [ticket-status]
 verify_jwt = false
+[functions.ticket-recovery]
+verify_jwt = false
