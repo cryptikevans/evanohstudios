@@ -51,13 +51,26 @@
       ticket.ticket_code || "—";
 
     /*
-     * Open the customer's actual digital ticket directly.
+     * IMPORTANT:
+     * Open the EXISTING digital ticket directly.
      *
-     * ticket.html reads the URL parameter:
-     * ?code=EVN-XXXXXXXXXX
+     * We use the ticket_code returned from the
+     * already-paid payment.
+     *
+     * Example:
+     * ticket.html?code=EVN-ABC1234567
      */
-    window.location.href =
-      `ticket.html?code=${encodeURIComponent(ticket.ticket_code)}`;
+
+    if (ticket.ticket_code) {
+      window.location.href =
+        `ticket.html?code=${encodeURIComponent(ticket.ticket_code)}`;
+      return;
+    }
+
+    setMessage(
+      "Payment confirmed, but no ticket code was found.",
+      "error"
+    );
   };
 
   form.addEventListener("submit", async (e) => {
@@ -66,7 +79,10 @@
     const receipt = input.value.trim().toUpperCase();
 
     if (!receipt) {
-      setMessage("Please enter your M-Pesa transaction code.", "error");
+      setMessage(
+        "Please enter your M-Pesa transaction code.",
+        "error"
+      );
       return;
     }
 
@@ -83,7 +99,9 @@
       const config = window.SELEKTA_CONFIG || {};
 
       if (!config.SUPABASE_URL) {
-        throw new Error("Supabase URL is not configured.");
+        throw new Error(
+          "Supabase URL is not configured."
+        );
       }
 
       const response = await fetch(
@@ -132,17 +150,25 @@
       }
 
       setMessage(
-        "Your ticket has been found. Opening your digital ticket...",
+        "Payment confirmed. Opening your digital ticket...",
         "success"
       );
 
+      /*
+       * This is the key step.
+       * It opens ticket.html, NOT the event page.
+       */
       showResult(data);
 
     } catch (err) {
-      console.error("Ticket recovery error:", err);
+      console.error(
+        "Ticket recovery error:",
+        err
+      );
 
       setMessage(
-        err.message || "Something went wrong. Please try again.",
+        err.message ||
+          "Something went wrong. Please try again.",
         "error"
       );
 
