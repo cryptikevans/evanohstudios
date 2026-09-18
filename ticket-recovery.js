@@ -20,7 +20,11 @@
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const receipt = input.value.trim().toUpperCase();
+    const receipt = input.value
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, "")
+  .substring(0, 10);
 
     if (!receipt) {
       setMessage("Please enter your M-Pesa transaction code.", "error");
