@@ -20,14 +20,29 @@
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const receipt = input.value
-  .trim()
-  .toUpperCase()
-  .replace(/[^A-Z0-9]/g, "")
-  .substring(0, 10);
+    const rawInput = input.value.trim().toUpperCase();
+
+    /*
+     * Extract a 10-character M-Pesa transaction code
+     * from either:
+     *
+     * UIHB971XDO
+     *
+     * or a full pasted M-Pesa message containing
+     * UIHB971XDO somewhere inside it.
+     */
+    const match = rawInput.match(/\b[A-Z0-9]{10}\b/);
+
+    const receipt = match ? match[0] : "";
+
+    console.log("RAW M-PESA INPUT:", rawInput);
+    console.log("EXTRACTED RECEIPT:", receipt);
 
     if (!receipt) {
-      setMessage("Please enter your M-Pesa transaction code.", "error");
+      setMessage(
+        "We couldn't detect a 10-character M-Pesa transaction code. Please check the message and try again.",
+        "error"
+      );
       return;
     }
 
@@ -38,7 +53,10 @@
       result.hidden = true;
     }
 
-    setMessage("Checking your payment and ticket...", "loading");
+    setMessage(
+      `M-Pesa code detected: ${receipt}. Checking your ticket...`,
+      "loading"
+    );
 
     try {
       const config = window.SELEKTA_CONFIG || {};
@@ -97,8 +115,7 @@
       }
 
       /*
-       * IMPORTANT:
-       * Open the actual ticket page using the ticket CODE.
+       * Open the existing ticket using its unique ticket code.
        */
       const ticketUrl =
         "https://evanohstudios.vercel.app/ticket.html?code=" +
@@ -111,10 +128,6 @@
         "success"
       );
 
-      /*
-       * Give the browser a tiny moment to process the response,
-       * then navigate directly to the ticket.
-       */
       setTimeout(() => {
         window.location.replace(ticketUrl);
       }, 300);
