@@ -137,8 +137,10 @@
         return;
       }
 
+      // Automatically use whichever domain the customer is currently visiting.
       const ticketUrl =
-        "https://evanohstudios.vercel.app/ticket.html?code=" +
+        window.location.origin +
+        "/ticket.html?code=" +
         encodeURIComponent(data.ticket_code);
 
       console.log("REDIRECTING TO:", ticketUrl);
