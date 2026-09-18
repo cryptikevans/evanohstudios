@@ -17,34 +17,62 @@
     message.className = `ticket-recovery-message ${type}`;
   };
 
+  // Extract the M-Pesa transaction code from either:
+  // UIIB971WAU
+  // OR a full M-Pesa confirmation message.
+  const extractMpesaCode = (value) => {
+    const text = String(value || "").trim().toUpperCase();
+
+    // Look for the first standalone 10-character
+    // letters/numbers transaction code.
+    const match = text.match(/\b[A-Z0-9]{10}\b/);
+
+    return match ? match[0] : "";
+  };
+
+  // When user pastes/types a full M-Pesa message,
+  // automatically replace it with just the transaction code.
+  input.addEventListener("input", () => {
+    const code = extractMpesaCode(input.value);
+
+    if (code) {
+      input.value = code;
+      console.log("EXTRACTED M-PESA CODE:", code);
+    }
+  });
+
+  // Extra protection specifically for paste.
+  input.addEventListener("paste", () => {
+    setTimeout(() => {
+      const code = extractMpesaCode(input.value);
+
+      if (code) {
+        input.value = code;
+        console.log("PASTED M-PESA MESSAGE:");
+        console.log("EXTRACTED CODE:", code);
+      }
+    }, 50);
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const rawInput = input.value.trim().toUpperCase();
+    // Even if the user manually enters a full message,
+    // extract only the transaction code.
+    const receipt = extractMpesaCode(input.value);
 
-    /*
-     * Extract a 10-character M-Pesa transaction code
-     * from either:
-     *
-     * UIHB971XDO
-     *
-     * or a full pasted M-Pesa message containing
-     * UIHB971XDO somewhere inside it.
-     */
-    const match = rawInput.match(/\b[A-Z0-9]{10}\b/);
-
-    const receipt = match ? match[0] : "";
-
-    console.log("RAW M-PESA INPUT:", rawInput);
-    console.log("EXTRACTED RECEIPT:", receipt);
+    console.log("FINAL RECEIPT SENT TO SERVER:", receipt);
 
     if (!receipt) {
       setMessage(
-        "We couldn't detect a 10-character M-Pesa transaction code. Please check the message and try again.",
+        "Please paste a valid M-Pesa confirmation message or enter the 10-character transaction code.",
         "error"
       );
       return;
     }
+
+    // Make sure the field visibly contains only the code.
+    input.value = receipt;
 
     button.disabled = true;
     button.textContent = "CHECKING...";
@@ -53,10 +81,7 @@
       result.hidden = true;
     }
 
-    setMessage(
-      `M-Pesa code detected: ${receipt}. Checking your ticket...`,
-      "loading"
-    );
+    setMessage("Checking your payment and ticket...", "loading");
 
     try {
       const config = window.SELEKTA_CONFIG || {};
@@ -64,8 +89,6 @@
       if (!config.SUPABASE_URL) {
         throw new Error("Supabase URL is not configured.");
       }
-
-      console.log("Checking receipt:", receipt);
 
       const response = await fetch(
         `${config.SUPABASE_URL}/functions/v1/ticket-recovery`,
@@ -82,7 +105,7 @@
 
       const data = await response.json().catch(() => ({}));
 
-      console.log("Recovery response:", data);
+      console.log("RECOVERY RESPONSE:", data);
 
       if (!response.ok) {
         throw new Error(
@@ -114,9 +137,6 @@
         return;
       }
 
-      /*
-       * Open the existing ticket using its unique ticket code.
-       */
       const ticketUrl =
         "https://evanohstudios.vercel.app/ticket.html?code=" +
         encodeURIComponent(data.ticket_code);
@@ -139,6 +159,7 @@
         err.message || "Something went wrong. Please try again.",
         "error"
       );
+
     } finally {
       button.disabled = false;
       button.textContent = "FIND MY TICKET";
