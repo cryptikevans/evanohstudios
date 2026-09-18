@@ -14,34 +14,57 @@
 
   const formatDate = (value) => {
     if (!value) return "—";
+
     const d = new Date(`${value}T00:00:00`);
-    return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-KE", {
-      day: "numeric", month: "long", year: "numeric"
-    });
+
+    return Number.isNaN(d.getTime())
+      ? value
+      : d.toLocaleDateString("en-KE", {
+          day: "numeric",
+          month: "long",
+          year: "numeric"
+        });
   };
 
   const showResult = (ticket) => {
-    document.getElementById("recoveredEventName").textContent = ticket.event_name || "Event Ticket";
-    document.getElementById("recoveredEventDate").textContent = formatDate(ticket.event_date);
-    document.getElementById("recoveredEventVenue").textContent = ticket.venue || "—";
-    document.getElementById("recoveredQuantity").textContent = ticket.quantity ?? "—";
+    document.getElementById("recoveredEventName").textContent =
+      ticket.event_name || "Event Ticket";
+
+    document.getElementById("recoveredEventDate").textContent =
+      formatDate(ticket.event_date);
+
+    document.getElementById("recoveredEventVenue").textContent =
+      ticket.venue || "—";
+
+    document.getElementById("recoveredQuantity").textContent =
+      ticket.quantity ?? "—";
+
     document.getElementById("recoveredAmount").textContent =
-      ticket.amount != null ? `KSh ${Number(ticket.amount).toLocaleString()}` : "—";
-    document.getElementById("recoveredReceipt").textContent = ticket.mpesa_receipt || "—";
-    document.getElementById("recoveredTicketCode").textContent = ticket.ticket_code || "—";
+      ticket.amount != null
+        ? `KSh ${Number(ticket.amount).toLocaleString()}`
+        : "—";
 
-    // Uses the existing ticket.html system.
-    document.getElementById("recoveredTicketLink").href =
-      `ticket.html?payment_id=${encodeURIComponent(ticket.payment_id)}`;
+    document.getElementById("recoveredReceipt").textContent =
+      ticket.mpesa_receipt || "—";
 
-    result.hidden = false;
-    result.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("recoveredTicketCode").textContent =
+      ticket.ticket_code || "—";
+
+    /*
+     * Open the customer's actual digital ticket directly.
+     *
+     * ticket.html reads the URL parameter:
+     * ?code=EVN-XXXXXXXXXX
+     */
+    window.location.href =
+      `ticket.html?code=${encodeURIComponent(ticket.ticket_code)}`;
   };
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const receipt = input.value.trim().toUpperCase();
+
     if (!receipt) {
       setMessage("Please enter your M-Pesa transaction code.", "error");
       return;
@@ -50,41 +73,79 @@
     button.disabled = true;
     button.textContent = "CHECKING...";
     result.hidden = true;
-    setMessage("Checking your payment and ticket...", "loading");
+
+    setMessage(
+      "Checking your payment and ticket...",
+      "loading"
+    );
 
     try {
       const config = window.SELEKTA_CONFIG || {};
-      if (!config.SUPABASE_URL) throw new Error("Supabase URL is not configured.");
 
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/ticket-recovery`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mpesa_receipt: receipt })
-      });
+      if (!config.SUPABASE_URL) {
+        throw new Error("Supabase URL is not configured.");
+      }
+
+      const response = await fetch(
+        `${config.SUPABASE_URL}/functions/v1/ticket-recovery`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            mpesa_receipt: receipt
+          })
+        }
+      );
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to find the ticket.");
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to find the ticket."
+        );
+      }
 
       if (data.status === "pending") {
-        setMessage("Payment found, but M-Pesa confirmation has not reached us yet. Please wait a little and try again.", "pending");
+        setMessage(
+          "Payment found, but M-Pesa confirmation has not reached us yet. Please wait a little and try again.",
+          "pending"
+        );
         return;
       }
 
       if (data.status !== "paid") {
-        setMessage("This payment has not been confirmed as paid.", "error");
+        setMessage(
+          "This payment has not been confirmed as paid.",
+          "error"
+        );
         return;
       }
 
       if (!data.ticket_code) {
-        setMessage("Payment is confirmed, but the ticket is still being generated. Please try again shortly.", "pending");
+        setMessage(
+          "Payment is confirmed, but the ticket is still being generated. Please try again shortly.",
+          "pending"
+        );
         return;
       }
 
-      setMessage("Your ticket has been found.", "success");
+      setMessage(
+        "Your ticket has been found. Opening your digital ticket...",
+        "success"
+      );
+
       showResult(data);
+
     } catch (err) {
       console.error("Ticket recovery error:", err);
-      setMessage(err.message || "Something went wrong. Please try again.", "error");
+
+      setMessage(
+        err.message || "Something went wrong. Please try again.",
+        "error"
+      );
+
     } finally {
       button.disabled = false;
       button.textContent = "FIND MY TICKET";
