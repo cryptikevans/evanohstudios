@@ -27,7 +27,6 @@
   };
 
   const showResult = (ticket) => {
-
     document.getElementById("recoveredEventName").textContent =
       ticket.event_name || "Event Ticket";
 
@@ -51,26 +50,12 @@
     document.getElementById("recoveredTicketCode").textContent =
       ticket.ticket_code || "—";
 
-
     /*
-     * =====================================================
-     * IMPORTANT TICKET REDIRECT
-     * =====================================================
+     * OPEN THE ACTUAL DIGITAL TICKET
      *
-     * Build the ticket URL from the CURRENT website address.
-     *
-     * This works correctly whether the website is:
-     *
-     * https://yourdomain.com/
-     *
-     * or:
-     *
-     * https://username.github.io/repository/
-     *
-     * We are NOT going to the event page.
-     * We are NOT creating another payment.
-     *
-     * We are opening the EXISTING ticket.
+     * The customer's existing ticket code is used.
+     * No new payment is created.
+     * No event checkout page is opened.
      */
 
     if (!ticket.ticket_code) {
@@ -81,29 +66,18 @@
       return;
     }
 
-    const ticketUrl = new URL(
-      "ticket.html",
-      window.location.href
-    );
+    const ticketUrl =
+      `https://evanohstudios.vercel.app/ticket.html?code=${encodeURIComponent(ticket.ticket_code)}`;
 
-    ticketUrl.searchParams.set(
-      "code",
-      ticket.ticket_code
-    );
+    console.log("Opening digital ticket:", ticketUrl);
 
-    console.log("OPENING DIGITAL TICKET:", ticketUrl.href);
-
-    // Open the actual digital ticket.
-    window.location.assign(ticketUrl.href);
+    window.location.href = ticketUrl;
   };
-
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const receipt = input.value
-      .trim()
-      .toUpperCase();
+    const receipt = input.value.trim().toUpperCase();
 
     if (!receipt) {
       setMessage(
@@ -125,11 +99,8 @@
       "loading"
     );
 
-
     try {
-
-      const config =
-        window.SELEKTA_CONFIG || {};
+      const config = window.SELEKTA_CONFIG || {};
 
       if (!config.SUPABASE_URL) {
         throw new Error(
@@ -137,26 +108,21 @@
         );
       }
 
-
       const response = await fetch(
         `${config.SUPABASE_URL}/functions/v1/ticket-recovery`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json"
           },
-
           body: JSON.stringify({
             mpesa_receipt: receipt
           })
         }
       );
 
-
       const data =
         await response.json().catch(() => ({}));
-
 
       if (!response.ok) {
         throw new Error(
@@ -165,55 +131,30 @@
         );
       }
 
-
-      /*
-       * Payment exists but is still pending.
-       */
       if (data.status === "pending") {
-
         setMessage(
           "Payment found, but M-Pesa confirmation has not reached us yet. Please wait a little and try again.",
           "pending"
         );
-
         return;
       }
 
-
-      /*
-       * Payment exists but isn't paid.
-       */
       if (data.status !== "paid") {
-
         setMessage(
           "This payment has not been confirmed as paid.",
           "error"
         );
-
         return;
       }
 
-
-      /*
-       * Payment is paid but ticket hasn't
-       * been generated yet.
-       */
       if (!data.ticket_code) {
-
         setMessage(
           "Payment is confirmed, but the ticket is still being generated. Please try again shortly.",
           "pending"
         );
-
         return;
       }
 
-
-      /*
-       * Everything is confirmed.
-       *
-       * Open the EXISTING digital ticket.
-       */
       setMessage(
         "Payment confirmed. Opening your digital ticket...",
         "success"
@@ -221,9 +162,7 @@
 
       showResult(data);
 
-
     } catch (err) {
-
       console.error(
         "Ticket recovery error:",
         err
@@ -236,11 +175,8 @@
       );
 
     } finally {
-
       button.disabled = false;
       button.textContent = "FIND MY TICKET";
-
     }
   });
-
 })();
