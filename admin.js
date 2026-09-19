@@ -486,30 +486,66 @@ window.delMix = async id => {
    ========================================================= */
 
 window.delEvent = async id => {
-
   if (!confirm('Delete event?')) return;
 
-  let x = (
-    await S
+  try {
+    const x = (
+      await S
+        .from('events')
+        .select('poster_path')
+        .eq('id', id)
+        .single()
+    ).data;
+
+    if (x?.poster_path) {
+      const storageResult = await S.storage
+        .from('event-posters')
+        .remove([x.poster_path]);
+
+      if (storageResult.error) {
+        console.error(
+          'POSTER DELETE ERROR:',
+          storageResult.error
+        );
+      }
+    }
+
+    const result = await S
       .from('events')
-      .select('poster_path')
-      .eq('id', id)
-      .single()
-  ).data;
+      .delete()
+      .eq('id', id);
 
-  if (x?.poster_path) {
+    console.log('EVENT DELETE RESULT:', result);
 
-    await S.storage
-      .from('event-posters')
-      .remove([x.poster_path]);
+    if (result.error) {
+      alert(
+        'Could not delete event:\n\n' +
+        result.error.message
+      );
+
+      console.error(
+        'EVENT DELETE ERROR:',
+        result.error
+      );
+
+      return;
+    }
+
+    alert('Event deleted successfully.');
+
+    refresh();
+
+  } catch (error) {
+    console.error(
+      'DELETE EVENT ERROR:',
+      error
+    );
+
+    alert(
+      'Delete failed:\n\n' +
+      (error.message || error)
+    );
   }
-
-  await S
-    .from('events')
-    .delete()
-    .eq('id', id);
-
-  refresh();
 };
 
 
