@@ -1,7 +1,11 @@
 const C = window.SELEKTA_CONFIG,
-  S = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_PUBLISHABLE_KEY),
+  S = supabase.createClient(
+    C.SUPABASE_URL,
+    C.SUPABASE_PUBLISHABLE_KEY
+  ),
   $ = id => document.getElementById(id),
-  safe = n => n.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+  safe = n =>
+    n.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
 
 let editingMixId = null,
   editingEventId = null;
@@ -12,7 +16,7 @@ let qrScanner = null;
 
 /* =========================================================
    ADMIN LOGIN
-   ========================================================= */
+========================================================= */
 
 async function start() {
   let u = (await S.auth.getUser()).data.user;
@@ -40,6 +44,7 @@ async function start() {
   refresh();
 }
 
+
 $('loginForm').onsubmit = async e => {
   e.preventDefault();
 
@@ -55,6 +60,7 @@ $('loginForm').onsubmit = async e => {
   }
 };
 
+
 $('logout').onclick = async () => {
   await S.auth.signOut();
   location.reload();
@@ -63,10 +69,11 @@ $('logout').onclick = async () => {
 
 /* =========================================================
    STORAGE UPLOAD
-   ========================================================= */
+========================================================= */
 
 async function upload(bucket, file, user, id) {
-  let path = `${user.id}/${id}-${safe(file.name)}`;
+  let path =
+    `${user.id}/${id}-${safe(file.name)}`;
 
   let r = await S.storage
     .from(bucket)
@@ -81,8 +88,8 @@ async function upload(bucket, file, user, id) {
 
 
 /* =========================================================
-   RESET FORMS
-   ========================================================= */
+   MIX FORM
+========================================================= */
 
 function resetMixForm() {
   editingMixId = null;
@@ -98,25 +105,6 @@ function resetMixForm() {
   $('mixCancel')?.remove();
 }
 
-
-function resetEventForm() {
-  editingEventId = null;
-
-  $('eventForm').reset();
-
-  $('ef').setAttribute('required', '');
-
-  $('eventForm')
-    .querySelector('button')
-    .textContent = 'Publish Event';
-
-  $('eventCancel')?.remove();
-}
-
-
-/* =========================================================
-   EDIT MIX
-   ========================================================= */
 
 window.editMix = async id => {
 
@@ -137,7 +125,8 @@ window.editMix = async id => {
 
   $('mf').removeAttribute('required');
 
-  let btn = $('mixForm').querySelector('button');
+  let btn =
+    $('mixForm').querySelector('button');
 
   btn.textContent = 'Update Mix';
 
@@ -161,71 +150,19 @@ window.editMix = async id => {
 };
 
 
-/* =========================================================
-   EDIT EVENT
-   ========================================================= */
-
-window.editEvent = async id => {
-
-  let x = (
-    await S
-      .from('events')
-      .select('*')
-      .eq('id', id)
-      .single()
-  ).data;
-
-  if (!x) return;
-
-  editingEventId = id;
-
-  $('en').value = x.name || '';
-  $('et').value = x.event_type || '';
-  $('ed').value = x.event_date || '';
-  $('ev').value = x.venue || '';
-  $('ep').value = x.ticket_price ?? '';
-  $('ex').value = x.description || '';
-
-  $('ef').removeAttribute('required');
-
-  let btn = $('eventForm').querySelector('button');
-
-  btn.textContent = 'Update Event';
-
-  if (!$('eventCancel')) {
-
-    let c = document.createElement('button');
-
-    c.type = 'button';
-    c.id = 'eventCancel';
-    c.className = 'btn ghost';
-    c.textContent = 'Cancel edit';
-
-    c.onclick = resetEventForm;
-
-    btn.after(c);
-  }
-
-  $('eventForm').scrollIntoView({
-    behavior: 'smooth'
-  });
-};
-
-
-/* =========================================================
-   MIX FORM
-   ========================================================= */
-
 $('mixForm').onsubmit = async e => {
 
   e.preventDefault();
 
   $('mixMsg').textContent =
-    editingMixId ? 'Updating…' : 'Uploading…';
+    editingMixId
+      ? 'Updating…'
+      : 'Uploading…';
 
   try {
 
-    let u = (await S.auth.getUser()).data.user;
+    let u =
+      (await S.auth.getUser()).data.user;
 
     let id =
       editingMixId ||
@@ -258,19 +195,21 @@ $('mixForm').onsubmit = async e => {
         );
     }
 
-    let r = editingMixId
-      ? await S
-          .from('mixes')
-          .update(patch)
-          .eq('id', id)
+    let r =
+      editingMixId
 
-      : await S
-          .from('mixes')
-          .insert({
-            ...patch,
-            cover_path:
-              patch.cover_path || null
-          });
+        ? await S
+            .from('mixes')
+            .update(patch)
+            .eq('id', id)
+
+        : await S
+            .from('mixes')
+            .insert({
+              ...patch,
+              cover_path:
+                patch.cover_path || null
+            });
 
     if (r.error) throw r.error;
 
@@ -293,18 +232,85 @@ $('mixForm').onsubmit = async e => {
 
 /* =========================================================
    EVENT FORM
-   ========================================================= */
+========================================================= */
+
+function resetEventForm() {
+
+  editingEventId = null;
+
+  $('eventForm').reset();
+
+  $('ef').setAttribute('required', '');
+
+  $('eventForm')
+    .querySelector('button')
+    .textContent = 'Publish Event';
+
+  $('eventCancel')?.remove();
+}
+
+
+window.editEvent = async id => {
+
+  let x = (
+    await S
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .single()
+  ).data;
+
+  if (!x) return;
+
+  editingEventId = id;
+
+  $('en').value = x.name || '';
+  $('et').value = x.event_type || '';
+  $('ed').value = x.event_date || '';
+  $('ev').value = x.venue || '';
+  $('ep').value = x.ticket_price ?? '';
+  $('ex').value = x.description || '';
+
+  $('ef').removeAttribute('required');
+
+  let btn =
+    $('eventForm').querySelector('button');
+
+  btn.textContent = 'Update Event';
+
+  if (!$('eventCancel')) {
+
+    let c = document.createElement('button');
+
+    c.type = 'button';
+    c.id = 'eventCancel';
+    c.className = 'btn ghost';
+    c.textContent = 'Cancel edit';
+
+    c.onclick = resetEventForm;
+
+    btn.after(c);
+  }
+
+  $('eventForm').scrollIntoView({
+    behavior: 'smooth'
+  });
+};
+
 
 $('eventForm').onsubmit = async e => {
 
   e.preventDefault();
 
   $('eventMsg').textContent =
-    editingEventId ? 'Updating…' : 'Uploading…';
+    editingEventId
+      ? 'Updating…'
+      : 'Uploading…';
 
   try {
 
-    let u = (await S.auth.getUser()).data.user;
+    let u =
+      (await S.auth.getUser()).data.user;
 
     let id =
       editingEventId ||
@@ -315,7 +321,8 @@ $('eventForm').onsubmit = async e => {
       event_type: $('et').value,
       event_date: $('ed').value,
       venue: $('ev').value,
-      ticket_price: Number($('ep').value),
+      ticket_price:
+        Number($('ep').value),
       description: $('ex').value
     };
 
@@ -330,16 +337,17 @@ $('eventForm').onsubmit = async e => {
         );
     }
 
-    let r = editingEventId
+    let r =
+      editingEventId
 
-      ? await S
-          .from('events')
-          .update(patch)
-          .eq('id', id)
+        ? await S
+            .from('events')
+            .update(patch)
+            .eq('id', id)
 
-      : await S
-          .from('events')
-          .insert(patch);
+        : await S
+            .from('events')
+            .insert(patch);
 
     if (r.error) throw r.error;
 
@@ -361,64 +369,135 @@ $('eventForm').onsubmit = async e => {
 
 
 /* =========================================================
-   REFRESH PUBLISHED CONTENT
-   ========================================================= */
+   EVENT STATUS
+========================================================= */
+
+function eventStatus(event) {
+
+  if (event.archived) {
+    return 'ARCHIVED';
+  }
+
+  if (!event.event_date) {
+    return 'UPCOMING';
+  }
+
+  const today =
+    new Date().toISOString().slice(0, 10);
+
+  if (event.event_date < today) {
+    return 'ENDED';
+  }
+
+  return 'UPCOMING';
+}
+
+
+/* =========================================================
+   REFRESH ADMIN CONTENT
+========================================================= */
 
 async function refresh() {
 
   let m = await S
     .from('mixes')
-    .select('id,title,created_at')
-    .order('created_at', {
-      ascending: false
-    });
+    .select(
+      'id,title,created_at'
+    )
+    .order(
+      'created_at',
+      { ascending: false }
+    );
 
   let e = await S
     .from('events')
-    .select('id,name,event_date,venue')
-    .order('event_date', {
-      ascending: false
-    });
+    .select(
+      'id,name,event_date,venue,archived'
+    )
+    .order(
+      'event_date',
+      { ascending: false }
+    );
 
-  $('list').innerHTML =
+  let mixes =
+    (m.data || [])
+      .map(x => `
 
-    '<h3>Mixes</h3>' +
+        <p>
 
-    (
-      (m.data || [])
-        .map(x => `
-          <p>
-            ${x.title}
+          ${x.title}
 
+          <button
+            class="btn ghost"
+            onclick="editMix('${x.id}')"
+          >
+            Edit
+          </button>
+
+          <button
+            class="danger"
+            onclick="delMix('${x.id}')"
+          >
+            Delete
+          </button>
+
+        </p>
+
+      `)
+      .join('');
+
+
+  let events =
+    (e.data || [])
+      .map(x => {
+
+        const status =
+          eventStatus(x);
+
+        let action = '';
+
+        if (x.archived) {
+
+          action = `
             <button
               class="btn ghost"
-              onclick="editMix('${x.id}')"
+              onclick="restoreEvent('${x.id}')"
             >
-              Edit
+              Restore
             </button>
+          `;
 
+        } else {
+
+          action = `
             <button
-              class="danger"
-              onclick="delMix('${x.id}')"
+              class="btn ghost"
+              onclick="archiveEvent('${x.id}')"
             >
-              Delete
+              Archive
             </button>
-          </p>
-        `)
-        .join('')
+          `;
+        }
 
-      || '<p>None</p>'
-    )
+        return `
 
-    +
-
-    '<h3>Events</h3>' +
-
-    (
-      (e.data || [])
-        .map(x => `
           <p>
-            ${x.name} — ${x.venue}
+
+            <strong>
+              ${x.name}
+            </strong>
+
+            — ${x.venue}
+
+            <br>
+
+            <small>
+              ${x.event_date || 'No date'}
+              •
+              ${status}
+            </small>
+
+            <br>
 
             <button
               class="btn ghost"
@@ -427,82 +506,235 @@ async function refresh() {
               Edit
             </button>
 
+            ${action}
+
             <button
               class="danger"
               onclick="delEvent('${x.id}')"
             >
               Delete
             </button>
-          </p>
-        `)
-        .join('')
 
-      || '<p>None</p>'
+          </p>
+
+        `;
+      })
+      .join('');
+
+
+  $('list').innerHTML =
+
+    '<h3>Mixes</h3>' +
+
+    (
+      mixes ||
+      '<p>None</p>'
+    )
+
+    +
+
+    '<h3>Events</h3>' +
+
+    (
+      events ||
+      '<p>None</p>'
     );
 }
 
 
 /* =========================================================
-   DELETE MIX
-   ========================================================= */
+   ARCHIVE EVENT
+========================================================= */
 
-window.delMix = async id => {
+window.archiveEvent = async id => {
 
-  if (!confirm('Delete mix?')) return;
-
-  let x = (
-    await S
-      .from('mixes')
-      .select('audio_path,cover_path')
-      .eq('id', id)
-      .single()
-  ).data;
-
-  if (x?.audio_path) {
-
-    await S.storage
-      .from('mixes')
-      .remove([x.audio_path]);
+  if (
+    !confirm(
+      'Archive this event?\n\n' +
+      'It will disappear from the public website, ' +
+      'but all payments, tickets and check-in records will remain safe.'
+    )
+  ) {
+    return;
   }
 
-  if (x?.cover_path) {
+  try {
 
-    await S.storage
-      .from('covers')
-      .remove([x.cover_path]);
+    const result =
+      await S
+        .from('events')
+        .update({
+          archived: true
+        })
+        .eq('id', id);
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    alert(
+      'Event archived successfully.'
+    );
+
+    refresh();
+
+  } catch (error) {
+
+    console.error(
+      'ARCHIVE EVENT ERROR:',
+      error
+    );
+
+    alert(
+      'Could not archive event:\n\n' +
+      error.message
+    );
+  }
+};
+
+
+/* =========================================================
+   RESTORE EVENT
+========================================================= */
+
+window.restoreEvent = async id => {
+
+  if (
+    !confirm(
+      'Restore this event and show it on the public website again?'
+    )
+  ) {
+    return;
   }
 
-  await S
-    .from('mixes')
-    .delete()
-    .eq('id', id);
+  try {
 
-  refresh();
+    const result =
+      await S
+        .from('events')
+        .update({
+          archived: false
+        })
+        .eq('id', id);
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    alert(
+      'Event restored successfully.'
+    );
+
+    refresh();
+
+  } catch (error) {
+
+    console.error(
+      'RESTORE EVENT ERROR:',
+      error
+    );
+
+    alert(
+      'Could not restore event:\n\n' +
+      error.message
+    );
+  }
 };
 
 
 /* =========================================================
    DELETE EVENT
-   ========================================================= */
+========================================================= */
 
 window.delEvent = async id => {
-  if (!confirm('Delete event?')) return;
+
+  if (
+    !confirm(
+      'Delete this event permanently?'
+    )
+  ) {
+    return;
+  }
 
   try {
-    const x = (
+
+    /*
+      First check whether this event
+      has ANY payments.
+    */
+
+    const paymentCheck =
       await S
-        .from('events')
-        .select('poster_path')
-        .eq('id', id)
-        .single()
-    ).data;
+        .from('payments')
+        .select(
+          'id',
+          { count: 'exact', head: true }
+        )
+        .eq(
+          'event_id',
+          id
+        );
+
+    if (paymentCheck.error) {
+      throw paymentCheck.error;
+    }
+
+    const paymentCount =
+      paymentCheck.count || 0;
+
+
+    /*
+      If payments exist, DO NOT DELETE.
+    */
+
+    if (paymentCount > 0) {
+
+      alert(
+        'This event has ' +
+        paymentCount +
+        ' payment record(s).\n\n' +
+
+        'It cannot be permanently deleted because ' +
+        'those payments may belong to customer tickets.\n\n' +
+
+        'Use ARCHIVE instead.'
+      );
+
+      return;
+    }
+
+
+    /*
+      No payments = safe to delete.
+    */
+
+    const x =
+      (
+        await S
+          .from('events')
+          .select(
+            'poster_path'
+          )
+          .eq('id', id)
+          .single()
+      ).data;
+
+
+    /*
+      Delete poster from Storage.
+    */
 
     if (x?.poster_path) {
-      const storageResult = await S.storage
-        .from('event-posters')
-        .remove([x.poster_path]);
+
+      const storageResult =
+        await S.storage
+          .from('event-posters')
+          .remove([
+            x.poster_path
+          ]);
 
       if (storageResult.error) {
+
         console.error(
           'POSTER DELETE ERROR:',
           storageResult.error
@@ -510,40 +742,101 @@ window.delEvent = async id => {
       }
     }
 
-    const result = await S
-      .from('events')
-      .delete()
-      .eq('id', id);
 
-    console.log('EVENT DELETE RESULT:', result);
+    /*
+      Delete event itself.
+    */
+
+    const result =
+      await S
+        .from('events')
+        .delete()
+        .eq('id', id);
+
 
     if (result.error) {
-      alert(
-        'Could not delete event:\n\n' +
-        result.error.message
-      );
-
-      console.error(
-        'EVENT DELETE ERROR:',
-        result.error
-      );
-
-      return;
+      throw result.error;
     }
 
-    alert('Event deleted successfully.');
+
+    alert(
+      'Event deleted successfully.'
+    );
 
     refresh();
 
   } catch (error) {
+
     console.error(
       'DELETE EVENT ERROR:',
       error
     );
 
     alert(
-      'Delete failed:\n\n' +
-      (error.message || error)
+      'Could not delete event:\n\n' +
+      error.message
+    );
+  }
+};
+
+
+/* =========================================================
+   DELETE MIX
+========================================================= */
+
+window.delMix = async id => {
+
+  if (!confirm('Delete mix?')) {
+    return;
+  }
+
+  try {
+
+    let x = (
+      await S
+        .from('mixes')
+        .select(
+          'audio_path,cover_path'
+        )
+        .eq('id', id)
+        .single()
+    ).data;
+
+    if (x?.audio_path) {
+
+      await S.storage
+        .from('mixes')
+        .remove([
+          x.audio_path
+        ]);
+    }
+
+    if (x?.cover_path) {
+
+      await S.storage
+        .from('covers')
+        .remove([
+          x.cover_path
+        ]);
+    }
+
+    const result =
+      await S
+        .from('mixes')
+        .delete()
+        .eq('id', id);
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    refresh();
+
+  } catch (error) {
+
+    alert(
+      'Could not delete mix:\n\n' +
+      error.message
     );
   }
 };
@@ -551,24 +844,25 @@ window.delEvent = async id => {
 
 /* =========================================================
    TICKET CHECK-IN
-   ========================================================= */
+========================================================= */
 
-function ticketMessage(text, type = '') {
+function ticketMessage(
+  text,
+  type = ''
+) {
 
-  const el = $('ticketCheckMessage');
+  const el =
+    $('ticketCheckMessage');
 
   if (!el) return;
 
   el.textContent = text;
 
   el.className =
-    'ticket-check-message ' + type;
+    'ticket-check-message ' +
+    type;
 }
 
-
-/* =========================================================
-   CLEAR TICKET RESULT
-   ========================================================= */
 
 function clearTicketResult() {
 
@@ -576,20 +870,19 @@ function clearTicketResult() {
     $('ticketCheckResult');
 
   if (result) {
-    result.style.display = 'none';
+    result.style.display =
+      'none';
   }
 
   currentTicketCode = null;
 
   if ($('confirmCheckin')) {
-    $('confirmCheckin').style.display = 'none';
+
+    $('confirmCheckin').style.display =
+      'none';
   }
 }
 
-
-/* =========================================================
-   FORMAT DATE
-   ========================================================= */
 
 function formatTicketDate(value) {
 
@@ -608,33 +901,32 @@ function formatTicketDate(value) {
 }
 
 
-/* =========================================================
-   FORMAT MONEY
-   ========================================================= */
-
 function formatTicketMoney(value) {
 
   return 'KSh ' +
     Number(value || 0)
-      .toLocaleString('en-KE', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      });
+      .toLocaleString(
+        'en-KE',
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        }
+      );
 }
 
 
-/* =========================================================
-   SHOW TICKET
-   ========================================================= */
-
-function showTicket(ticket, status) {
+function showTicket(
+  ticket,
+  status
+) {
 
   const result =
     $('ticketCheckResult');
 
   if (!result) return;
 
-  result.style.display = 'block';
+  result.style.display =
+    'block';
 
   $('checkEventName').textContent =
     ticket.event_name ||
@@ -664,57 +956,83 @@ function showTicket(ticket, status) {
     ticket.ticket_code ||
     '—';
 
+
   const statusEl =
     $('ticketCheckStatus');
+
 
   if (status === 'valid') {
 
     statusEl.textContent =
       '✓ VALID TICKET';
 
-    statusEl.style.padding = '12px';
-    statusEl.style.fontWeight = '700';
+    statusEl.style.padding =
+      '12px';
+
+    statusEl.style.fontWeight =
+      '700';
+
 
     const btn =
       $('confirmCheckin');
 
-    btn.style.display = 'block';
-    btn.disabled = false;
+    btn.style.display =
+      'block';
+
+    btn.disabled =
+      false;
+
     btn.textContent =
       '✓ CHECK IN GUEST';
 
+
     currentTicketCode =
       ticket.ticket_code;
+
 
     ticketMessage(
       'Ticket is valid and ready for check-in.',
       'success'
     );
 
-  } else if (
-    status === 'already_checked_in'
+  }
+
+
+  else if (
+    status ===
+    'already_checked_in'
   ) {
 
     statusEl.textContent =
       '⚠ ALREADY CHECKED IN';
 
-    statusEl.style.padding = '12px';
-    statusEl.style.fontWeight = '700';
+    statusEl.style.padding =
+      '12px';
+
+    statusEl.style.fontWeight =
+      '700';
+
 
     const btn =
       $('confirmCheckin');
 
-    btn.style.display = 'none';
+    btn.style.display =
+      'none';
+
 
     currentTicketCode =
       ticket.ticket_code;
+
 
     const checkedAt =
       ticket.checked_in_at
         ? new Date(
             ticket.checked_in_at
-          ).toLocaleString('en-KE')
+          ).toLocaleString(
+            'en-KE'
+          )
         : 'previously';
+
 
     ticketMessage(
       `This ticket was already checked in at ${checkedAt}.`,
@@ -725,14 +1043,15 @@ function showTicket(ticket, status) {
 
 
 /* =========================================================
-   CHECK TICKET WITH SUPABASE FUNCTION
-   ========================================================= */
+   CHECK TICKET
+========================================================= */
 
 async function checkTicket(code) {
 
-  code = String(code || '')
-    .trim()
-    .toUpperCase();
+  code =
+    String(code || '')
+      .trim()
+      .toUpperCase();
 
   if (!code) {
 
@@ -744,12 +1063,14 @@ async function checkTicket(code) {
     return;
   }
 
+
   clearTicketResult();
 
   ticketMessage(
     'Checking ticket...',
     'loading'
   );
+
 
   try {
 
@@ -773,15 +1094,18 @@ async function checkTicket(code) {
         }
       );
 
+
     const data =
       await response
         .json()
         .catch(() => ({}));
 
+
     console.log(
       'TICKET CHECK RESPONSE:',
       data
     );
+
 
     if (!response.ok) {
 
@@ -805,7 +1129,11 @@ async function checkTicket(code) {
       );
     }
 
-    if (data.status === 'valid') {
+
+    if (
+      data.status ===
+      'valid'
+    ) {
 
       showTicket(
         data.ticket,
@@ -814,6 +1142,7 @@ async function checkTicket(code) {
 
       return;
     }
+
 
     if (
       data.status ===
@@ -828,10 +1157,12 @@ async function checkTicket(code) {
       return;
     }
 
+
     throw new Error(
       data.message ||
       'Ticket could not be verified.'
     );
+
 
   } catch (error) {
 
@@ -852,8 +1183,8 @@ async function checkTicket(code) {
 
 
 /* =========================================================
-   MANUAL TICKET CHECK FORM
-   ========================================================= */
+   MANUAL TICKET CHECK
+========================================================= */
 
 if ($('ticketCheckForm')) {
 
@@ -874,8 +1205,8 @@ if ($('ticketCheckForm')) {
 
 
 /* =========================================================
-   CHECK IN GUEST
-   ========================================================= */
+   CONFIRM CHECK-IN
+========================================================= */
 
 if ($('confirmCheckin')) {
 
@@ -892,17 +1223,23 @@ if ($('confirmCheckin')) {
         return;
       }
 
+
       const button =
         $('confirmCheckin');
 
-      button.disabled = true;
+
+      button.disabled =
+        true;
+
       button.textContent =
         'CHECKING IN...';
+
 
       ticketMessage(
         'Checking guest in...',
         'loading'
       );
+
 
       try {
 
@@ -930,15 +1267,18 @@ if ($('confirmCheckin')) {
             }
           );
 
+
         const data =
           await response
             .json()
             .catch(() => ({}));
 
+
         console.log(
           'CHECK-IN RESPONSE:',
           data
         );
+
 
         if (!response.ok) {
 
@@ -947,6 +1287,7 @@ if ($('confirmCheckin')) {
             'Could not check in guest.'
           );
         }
+
 
         if (
           data.status ===
@@ -965,8 +1306,10 @@ if ($('confirmCheckin')) {
           statusEl.style.fontWeight =
             '700';
 
+
           button.style.display =
             'none';
+
 
           ticketMessage(
             `Guest successfully checked in at ${new Date().toLocaleTimeString('en-KE')}.`,
@@ -976,6 +1319,7 @@ if ($('confirmCheckin')) {
           return;
         }
 
+
         if (
           data.status ===
           'already_checked_in'
@@ -983,6 +1327,7 @@ if ($('confirmCheckin')) {
 
           button.style.display =
             'none';
+
 
           ticketMessage(
             data.message ||
@@ -993,10 +1338,12 @@ if ($('confirmCheckin')) {
           return;
         }
 
+
         throw new Error(
           data.message ||
           'Check-in failed.'
         );
+
 
       } catch (error) {
 
@@ -1005,13 +1352,17 @@ if ($('confirmCheckin')) {
           error
         );
 
+
         ticketMessage(
           error.message ||
           'Unable to check in guest.',
           'error'
         );
 
-        button.disabled = false;
+
+        button.disabled =
+          false;
+
         button.textContent =
           '✓ CHECK IN GUEST';
       }
@@ -1020,9 +1371,8 @@ if ($('confirmCheckin')) {
 
 
 /* =========================================================
-   QR CODE SCANNER
-   ========================================================= */
-
+   QR SCANNER
+========================================================= */
 if ($('startScanner')) {
 
   $('startScanner').onclick =
@@ -1034,7 +1384,9 @@ if ($('startScanner')) {
       const stop =
         $('stopScanner');
 
+
       if (!reader) return;
+
 
       reader.style.display =
         'block';
@@ -1045,10 +1397,12 @@ if ($('startScanner')) {
       $('startScanner').disabled =
         true;
 
+
       ticketMessage(
         'Opening camera...',
         'loading'
       );
+
 
       try {
 
@@ -1057,10 +1411,12 @@ if ($('startScanner')) {
             'qrReader'
           );
 
+
         await qrScanner.start(
 
           {
-            facingMode: 'environment'
+            facingMode:
+              'environment'
           },
 
           {
@@ -1079,7 +1435,9 @@ if ($('startScanner')) {
               decodedText
             );
 
+
             let code = '';
+
 
             try {
 
@@ -1088,7 +1446,8 @@ if ($('startScanner')) {
 
               code =
                 url.searchParams
-                  .get('code') || '';
+                  .get('code') ||
+                '';
 
             } catch {
 
@@ -1097,6 +1456,7 @@ if ($('startScanner')) {
                   .trim()
                   .toUpperCase();
             }
+
 
             if (!code) {
 
@@ -1108,26 +1468,28 @@ if ($('startScanner')) {
               return;
             }
 
+
             await stopQrScanner();
+
 
             $('ticketCheckCode').value =
               code;
+
 
             await checkTicket(code);
           },
 
           errorMessage => {
-            // Scanner continuously reports
-            // frames where no QR is detected.
-            // We intentionally don't display
-            // those messages.
+            // No QR detected in this frame.
           }
         );
+
 
         ticketMessage(
           'Point the camera at the ticket QR code.',
           'loading'
         );
+
 
       } catch (error) {
 
@@ -1135,6 +1497,7 @@ if ($('startScanner')) {
           'QR scanner error:',
           error
         );
+
 
         reader.style.display =
           'none';
@@ -1145,6 +1508,7 @@ if ($('startScanner')) {
         $('startScanner').disabled =
           false;
 
+
         ticketMessage(
           'Could not open the camera. Check your browser camera permission.',
           'error'
@@ -1154,13 +1518,10 @@ if ($('startScanner')) {
 }
 
 
-/* =========================================================
-   STOP QR SCANNER
-   ========================================================= */
-
 async function stopQrScanner() {
 
   if (!qrScanner) return;
+
 
   try {
 
@@ -1174,6 +1535,7 @@ async function stopQrScanner() {
     );
   }
 
+
   try {
 
     await qrScanner.clear();
@@ -1186,19 +1548,26 @@ async function stopQrScanner() {
     );
   }
 
+
   qrScanner = null;
 
+
   if ($('qrReader')) {
+
     $('qrReader').style.display =
       'none';
   }
 
+
   if ($('stopScanner')) {
+
     $('stopScanner').style.display =
       'none';
   }
 
+
   if ($('startScanner')) {
+
     $('startScanner').disabled =
       false;
   }
@@ -1219,9 +1588,5 @@ if ($('stopScanner')) {
     };
 }
 
-
-/* =========================================================
-   START ADMIN
-   ========================================================= */
 
 start();
