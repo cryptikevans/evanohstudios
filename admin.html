@@ -1,1 +1,542 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Selekta Evanoh Admin</title><link rel="stylesheet" href="styles.css"></head><body><header><div class="nav"><a class="brand" href="index.html">▮▮▮ SELEKTA EVANOH ADMIN</a><a href="index.html">Public site</a></div></header><main style="padding-top:120px"><div class="wrap"><div id="login"><small>PRIVATE AREA</small><h1>Admin Login</h1><form id="loginForm" class="form"><label>Email<input id="email" type="email" required></label><label>Password<input id="password" type="password" required></label><button class="btn full">Login</button></form><p id="loginMsg"></p></div><div id="dash" hidden><div style="display:flex;justify-content:space-between;align-items:center"><div><small>CONTROL ROOM</small><h1>Dashboard</h1></div><button id="logout" class="btn ghost">Log out</button></div><div class="form"><section><h2>Upload Mix</h2><form id="mixForm" class="form"><label>Mix title<input id="mt" required></label><label>Description<input id="md"></label><label>Audio<input id="mf" type="file" accept="audio/*" required></label><label>Cover<input id="mc" type="file" accept="image/*"></label><button class="btn full">Publish Mix</button></form><p id="mixMsg"></p></section><section><h2>Upload Event</h2><form id="eventForm" class="form"><label>Name<input id="en" required></label><label>Type<select id="et"><option>Club Event</option><option>Wedding</option><option>Private Party</option><option>Corporate Event</option><option>Festival</option><option>Other</option></select></label><label>Date<input id="ed" type="date" required></label><label>Venue<input id="ev" required></label><label>Ticket price<input id="ep" type="number" min="0" required></label><label class="full">About the event<textarea id="ex" required></textarea></label><label>Poster<input id="ef" type="file" accept="image/*" required></label><button class="btn full">Publish Event</button></form><p id="eventMsg"></p></section></div><section><h2>Published Content</h2><div id="list"></div></section></div></div></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="admin.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <title>Selekta Evanoh Admin</title>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="index.html">
+      ▮▮▮ SELEKTA EVANOH ADMIN
+    </a>
+
+    <a href="index.html">
+      Public site
+    </a>
+  </div>
+</header>
+
+
+<main style="padding-top:120px">
+
+<div class="wrap">
+
+  <!-- ========================= -->
+  <!-- ADMIN LOGIN -->
+  <!-- ========================= -->
+
+  <div id="login">
+
+    <small>PRIVATE AREA</small>
+
+    <h1>Admin Login</h1>
+
+    <form id="loginForm" class="form">
+
+      <label>
+        Email
+        <input
+          id="email"
+          type="email"
+          required
+        >
+      </label>
+
+      <label>
+        Password
+        <input
+          id="password"
+          type="password"
+          required
+        >
+      </label>
+
+      <button class="btn full">
+        Login
+      </button>
+
+    </form>
+
+    <p id="loginMsg"></p>
+
+  </div>
+
+
+  <!-- ========================= -->
+  <!-- ADMIN DASHBOARD -->
+  <!-- ========================= -->
+
+  <div id="dash" hidden>
+
+    <!-- DASHBOARD HEADER -->
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
+
+      <div>
+
+        <small>CONTROL ROOM</small>
+
+        <h1>Dashboard</h1>
+
+      </div>
+
+      <button
+        id="logout"
+        class="btn ghost"
+      >
+        Log out
+      </button>
+
+    </div>
+
+
+    <!-- ========================= -->
+    <!-- TICKET CHECK-IN -->
+    <!-- ========================= -->
+
+    <section
+      class="ticket-checkin-admin"
+      style="margin-top:40px"
+    >
+
+      <small>GATE CONTROL</small>
+
+      <h2>🎟️ Ticket Check-In</h2>
+
+      <p>
+        Scan a customer's QR code or enter their ticket code manually.
+      </p>
+
+
+      <div
+        class="ticket-checkin-box"
+        style="margin-top:20px"
+      >
+
+        <!-- QR SCANNER BUTTON -->
+
+        <button
+          id="startScanner"
+          class="btn full"
+          type="button"
+        >
+          📷 SCAN QR CODE
+        </button>
+
+
+        <!-- QR SCANNER -->
+
+        <div
+          id="qrReader"
+          style="
+            width:100%;
+            max-width:500px;
+            margin:20px auto;
+            display:none;
+          "
+        >
+        </div>
+
+
+        <!-- SCANNER CLOSE BUTTON -->
+
+        <button
+          id="stopScanner"
+          class="btn ghost full"
+          type="button"
+          style="display:none;margin-top:10px"
+        >
+          STOP SCANNER
+        </button>
+
+
+        <div style="text-align:center;margin:20px 0">
+
+          <strong>OR</strong>
+
+        </div>
+
+
+        <!-- MANUAL TICKET CHECK -->
+
+        <form
+          id="ticketCheckForm"
+          class="form"
+        >
+
+          <label>
+
+            Ticket Code
+
+            <input
+              id="ticketCheckCode"
+              type="text"
+              placeholder="e.g. EVN-5BE9818511"
+              autocomplete="off"
+              required
+            >
+
+          </label>
+
+
+          <button
+            class="btn full"
+            type="submit"
+          >
+            CHECK TICKET
+          </button>
+
+        </form>
+
+
+        <!-- CHECK-IN MESSAGE -->
+
+        <div
+          id="ticketCheckMessage"
+          aria-live="polite"
+          style="margin-top:15px"
+        >
+        </div>
+
+
+        <!-- TICKET RESULT -->
+
+        <div
+          id="ticketCheckResult"
+          style="
+            display:none;
+            margin-top:25px;
+          "
+        >
+
+          <div
+            id="ticketCheckStatus"
+            style="margin-bottom:15px"
+          >
+          </div>
+
+
+          <h3 id="checkEventName">
+            Event
+          </h3>
+
+
+          <div
+            class="ticket-check-details"
+            style="margin-top:15px"
+          >
+
+            <p>
+              <strong>Date:</strong>
+              <span id="checkEventDate">—</span>
+            </p>
+
+            <p>
+              <strong>Venue:</strong>
+              <span id="checkEventVenue">—</span>
+            </p>
+
+            <p>
+              <strong>Tickets:</strong>
+              <span id="checkQuantity">—</span>
+            </p>
+
+            <p>
+              <strong>Amount:</strong>
+              <span id="checkAmount">—</span>
+            </p>
+
+            <p>
+              <strong>M-Pesa:</strong>
+              <span id="checkReceipt">—</span>
+            </p>
+
+            <p>
+              <strong>Ticket:</strong>
+              <span id="checkTicketCode">—</span>
+            </p>
+
+          </div>
+
+
+          <!-- CONFIRM CHECK-IN -->
+
+          <button
+            id="confirmCheckin"
+            class="btn full"
+            type="button"
+            style="margin-top:20px"
+          >
+            ✓ CHECK IN GUEST
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ========================= -->
+    <!-- CONTENT MANAGEMENT -->
+    <!-- ========================= -->
+
+    <div
+      class="form"
+      style="margin-top:40px"
+    >
+
+
+      <!-- ========================= -->
+      <!-- UPLOAD MIX -->
+      <!-- ========================= -->
+
+      <section>
+
+        <h2>Upload Mix</h2>
+
+        <form
+          id="mixForm"
+          class="form"
+        >
+
+          <label>
+            Mix title
+
+            <input
+              id="mt"
+              required
+            >
+          </label>
+
+
+          <label>
+            Description
+
+            <input
+              id="md"
+            >
+          </label>
+
+
+          <label>
+            Audio
+
+            <input
+              id="mf"
+              type="file"
+              accept="audio/*"
+              required
+            >
+          </label>
+
+
+          <label>
+            Cover
+
+            <input
+              id="mc"
+              type="file"
+              accept="image/*"
+            >
+          </label>
+
+
+          <button
+            class="btn full"
+          >
+            Publish Mix
+          </button>
+
+        </form>
+
+
+        <p id="mixMsg"></p>
+
+      </section>
+
+
+      <!-- ========================= -->
+      <!-- UPLOAD EVENT -->
+      <!-- ========================= -->
+
+      <section>
+
+        <h2>Upload Event</h2>
+
+        <form
+          id="eventForm"
+          class="form"
+        >
+
+          <label>
+            Name
+
+            <input
+              id="en"
+              required
+            >
+          </label>
+
+
+          <label>
+            Type
+
+            <select id="et">
+
+              <option>
+                Club Event
+              </option>
+
+              <option>
+                Wedding
+              </option>
+
+              <option>
+                Private Party
+              </option>
+
+              <option>
+                Corporate Event
+              </option>
+
+              <option>
+                Festival
+              </option>
+
+              <option>
+                Other
+              </option>
+
+            </select>
+
+          </label>
+
+
+          <label>
+            Date
+
+            <input
+              id="ed"
+              type="date"
+              required
+            >
+          </label>
+
+
+          <label>
+            Venue
+
+            <input
+              id="ev"
+              required
+            >
+          </label>
+
+
+          <label>
+            Ticket price
+
+            <input
+              id="ep"
+              type="number"
+              min="0"
+              required
+            >
+
+          </label>
+
+
+          <label class="full">
+
+            About the event
+
+            <textarea
+              id="ex"
+              required
+            ></textarea>
+
+          </label>
+
+
+          <label>
+
+            Poster
+
+            <input
+              id="ef"
+              type="file"
+              accept="image/*"
+              required
+            >
+
+          </label>
+
+
+          <button
+            class="btn full"
+          >
+            Publish Event
+          </button>
+
+        </form>
+
+
+        <p id="eventMsg"></p>
+
+      </section>
+
+
+    </div>
+
+
+    <!-- ========================= -->
+    <!-- PUBLISHED CONTENT -->
+    <!-- ========================= -->
+
+    <section
+      style="margin-top:40px"
+    >
+
+      <h2>Published Content</h2>
+
+      <div id="list"></div>
+
+    </section>
+
+
+  </div>
+
+</div>
+
+</main>
+
+
+<!-- SUPABASE -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+<!-- SITE CONFIG -->
+
+<script src="config.js"></script>
+
+
+<!-- QR SCANNER LIBRARY -->
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+
+<!-- EXISTING ADMIN JAVASCRIPT -->
+
+<script src="admin.js"></script>
+
+</body>
+  </html>
