@@ -1,192 +1,194 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const C = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
-
-const out = (x: any, s = 200) => new Response(JSON.stringify(x), { status: s, headers: { 'Content-Type': 'application/json', ...C } });
-
-/* FORMAT PHONE NUMBER */
-const phone = (x: string) => {
-  x = String(x || '').replace(/^\+/, '').replace(/\s/g, '');
-  if (/^0[17]\d{8}$/.test(x)) return '254' + x.slice(1);
-  if (/^254[17]\d{8}$/.test(x)) return x;
-  throw Error('Invalid Safaricom number');
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-/* KENYA TIMESTAMP */
-const ts = () => {
-  let p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date());
-  let o = Object.fromEntries(p.map(x => [x.type, x.value]));
-  return `${o.year}${o.month}${o.day}${o.hour}${o.minute}${o.second}`;
-};
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
+}
 
-/* STK PUSH */
-Deno.serve(async r => {
+function fail(message: string, status = 500) {
+  return json({ ok: false, message }, status);
+}
 
-  /* CORS */
-  if (r.method === 'OPTIONS') return new Response('ok', { headers: C });
-  if (r.method !== 'POST') return out({ ok: false, message: 'Method not allowed.' }, 405);
+/** Normalizes a Kenyan phone number to 2547XXXXXXXX / 2541XXXXXXXX format. */
+function normalizePhone(input: string): string {
+  const digits = String(input || '').replace(/^\+/, '').replace(/\s/g, '');
+  if (/^0[17]\d{8}$/.test(digits)) return '254' + digits.slice(1);
+  if (/^254[17]\d{8}$/.test(digits)) return digits;
+  throw new Error('Invalid Safaricom number');
+}
+
+/** Returns the current time in Africa/Nairobi as YYYYMMDDHHmmss (M-Pesa timestamp format). */
+function mpesaTimestamp(): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Nairobi',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const p = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${p.year}${p.month}${p.day}${p.hour}${p.minute}${p.second}`;
+}
+
+interface StkPushRequest {
+  event_id: string;
+  quantity: number;
+  phone: string;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  if (req.method !== 'POST') return fail('Method not allowed.', 405);
 
   try {
-
-    /* REQUEST */
-    let { event_id, quantity, phone: raw } = await r.json();
-    quantity = Number(quantity);
+    const { event_id, quantity: rawQty, phone: rawPhone } = (await req.json()) as StkPushRequest;
+    const quantity = Number(rawQty);
 
     if (!event_id || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
-      return out({ ok: false, message: 'Invalid ticket request' }, 400);
+      return fail('Invalid ticket request', 400);
     }
 
-    /* SUPABASE */
-    let db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const db = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
 
-    /* EVENT */
-    let eventResult = await db.from('events').select('id,name,ticket_price,published,archived').eq('id', event_id).single();
-    let ev = eventResult.data;
+    // --- Look up event ---
+    const { data: event, error: eventError } = await db
+      .from('events')
+      .select('id,name,ticket_price,published,archived')
+      .eq('id', event_id)
+      .single();
 
-    if (eventResult.error) {
-      console.error('EVENT LOOKUP ERROR:', eventResult.error);
-      return out({ ok: false, message: 'Could not verify event.' }, 500);
+    if (eventError) {
+      console.error('EVENT LOOKUP ERROR:', eventError);
+      return fail('Could not verify event.', 500);
     }
+    if (!event?.published) return fail('Event unavailable.', 404);
+    if (event.archived) return fail('This event is no longer accepting ticket payments.', 400);
 
-    if (!ev?.published) return out({ ok: false, message: 'Event unavailable.' }, 404);
+    // --- Compute amount ---
+    const amount = Math.round(Number(event.ticket_price) * quantity);
+    if (!Number.isFinite(amount) || amount <= 0) return fail('Invalid ticket amount.', 400);
 
-    /* DO NOT ACCEPT PAYMENTS FOR ARCHIVED EVENTS */
-    if (ev.archived) return out({ ok: false, message: 'This event is no longer accepting ticket payments.' }, 400);
+    const phone = normalizePhone(rawPhone);
 
-    /* AMOUNT */
-    let amount = Math.round(Number(ev.ticket_price) * quantity);
-    if (!Number.isFinite(amount) || amount <= 0) return out({ ok: false, message: 'Invalid ticket amount.' }, 400);
+    // --- M-Pesa environment/config ---
+    const mpesaEnv = Deno.env.get('MPESA_ENV') || 'sandbox';
+    const baseUrl = mpesaEnv === 'production'
+      ? 'https://api.safaricom.co.ke'
+      : 'https://sandbox.safaricom.co.ke';
 
-    /* PHONE */
-    let p = phone(raw);
+    const consumerKey = Deno.env.get('MPESA_CONSUMER_KEY');
+    const consumerSecret = Deno.env.get('MPESA_CONSUMER_SECRET');
+    if (!consumerKey || !consumerSecret) throw new Error('M-Pesa credentials are not configured.');
 
-    /* MPESA ENVIRONMENT */
-    let env = Deno.env.get('MPESA_ENV') || 'sandbox';
-    let base = env === 'production' ? 'https://api.safaricom.co.ke' : 'https://sandbox.safaricom.co.ke';
-
-    /* DARAAJA AUTH */
-    let consumerKey = Deno.env.get('MPESA_CONSUMER_KEY');
-    let consumerSecret = Deno.env.get('MPESA_CONSUMER_SECRET');
-
-    if (!consumerKey || !consumerSecret) throw Error('M-Pesa credentials are not configured.');
-
-    let auth = btoa(`${consumerKey}:${consumerSecret}`);
-    let a = await fetch(`${base}/oauth/v1/generate?grant_type=client_credentials`, { headers: { Authorization: `Basic ${auth}` } });
-    let aj = await a.json();
-
-    if (!a.ok || !aj.access_token) {
-      console.error('MPESA AUTH ERROR:', aj);
-      throw Error('M-Pesa authorization failed.');
-    }
-
-    /* TILL CONFIGURATION */
     const shortcode = Deno.env.get('MPESA_SHORTCODE');
-    if (!shortcode) throw Error('MPESA_SHORTCODE is not configured.');
-
-    /* Your Buy Goods Till: 1592378 — keep the actual value in Supabase secrets. */
+    if (!shortcode) throw new Error('MPESA_SHORTCODE is not configured.');
 
     const transactionType = Deno.env.get('MPESA_TRANSACTION_TYPE') || 'CustomerBuyGoodsOnline';
 
-    /* STK PASSWORD */
-    let t = ts();
-    let pass = btoa(`${shortcode}${Deno.env.get('MPESA_PASSKEY')}${t}`);
+    // --- OAuth ---
+    const authRes = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${btoa(`${consumerKey}:${consumerSecret}`)}` },
+    });
+    const authJson = await authRes.json();
 
-    /* CREATE PAYMENT RECORD */
-    let ins = await db.from('payments').insert({ event_id, quantity, amount, phone: p, status: 'pending' }).select('id').single();
-    if (ins.error) {
-      console.error('PAYMENT INSERT ERROR:', ins.error);
-      throw ins.error;
+    if (!authRes.ok || !authJson.access_token) {
+      console.error('MPESA AUTH ERROR:', authJson);
+      throw new Error('M-Pesa authorization failed.');
     }
 
-    /* STK PUSH BODY */
-    let body = {
+    // --- STK push password ---
+    const timestamp = mpesaTimestamp();
+    const password = btoa(`${shortcode}${Deno.env.get('MPESA_PASSKEY')}${timestamp}`);
+
+    // --- Create pending payment record ---
+    const { data: payment, error: insertError } = await db
+      .from('payments')
+      .insert({ event_id, quantity, amount, phone, status: 'pending' })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('PAYMENT INSERT ERROR:', insertError);
+      throw insertError;
+    }
+
+    // --- Send STK push ---
+    const stkBody = {
       BusinessShortCode: shortcode,
-      Password: pass,
-      Timestamp: t,
+      Password: password,
+      Timestamp: timestamp,
       TransactionType: transactionType,
       Amount: amount,
-      PartyA: p,
+      PartyA: phone,
       PartyB: shortcode,
-      PhoneNumber: p,
+      PhoneNumber: phone,
       CallBackURL: Deno.env.get('MPESA_CALLBACK_URL'),
       AccountReference: 'SELEKTA',
-      TransactionDesc: `${ev.name} ticket`
+      TransactionDesc: `${event.name} ticket`,
     };
 
-    console.log('STK PUSH CONFIG:', { environment: env, transactionType, shortcode, amount, phone: p, event_id, quantity });
+    console.log('STK PUSH CONFIG:', { environment: mpesaEnv, transactionType, shortcode, amount, phone, event_id, quantity });
 
-    /* SEND STK PUSH */
-    let sr = await fetch(
-  `${base}/mpesa/stkpush/v1/processrequest`,
-  {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${aj.access_token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  }
-);
+    const stkRes = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authJson.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(stkBody),
+    });
 
-/*
-  Read the response as text first.
-  This prevents "Unexpected end of JSON input"
-  when Safaricom returns an empty/non-JSON response.
-*/
-const rawResponse = await sr.text();
+    // Read as text first — avoids "Unexpected end of JSON input" if
+    // Safaricom returns an empty or non-JSON response.
+    const rawResponse = await stkRes.text();
+    console.log('STK HTTP STATUS:', stkRes.status);
+    console.log('STK RAW RESPONSE:', rawResponse);
 
-console.log('STK HTTP STATUS:', sr.status);
-console.log('STK RAW RESPONSE:', rawResponse);
-
-let sj: any = {};
-
-try {
-  sj = rawResponse
-    ? JSON.parse(rawResponse)
-    : {};
-} catch (parseError) {
-  console.error(
-    'STK RESPONSE JSON PARSE ERROR:',
-    parseError
-  );
-
-  throw Error(
-    `Safaricom returned an invalid response (HTTP ${sr.status}).`
-  );
-}
-
-console.log('STK PUSH RESPONSE:', sj);
-
-/* HANDLE FAILURE */
-if (!sr.ok || sj.ResponseCode !== '0') {
-
-  await db
-    .from('payments')
-    .update({
-      status: 'failed'
-    })
-    .eq('id', ins.data.id);
-
-  throw Error(
-    sj.errorMessage ||
-    sj.ResponseDescription ||
-    sj.errorCode ||
-    `STK Push failed (HTTP ${sr.status})`
-  );
-}
-      await db.from('payments').update({ status: 'failed' }).eq('id', ins.data.id);
-      throw Error(sj.errorMessage || sj.ResponseDescription || 'STK Push failed');
+    let stkJson: any = {};
+    try {
+      stkJson = rawResponse ? JSON.parse(rawResponse) : {};
+    } catch (parseError) {
+      console.error('STK RESPONSE JSON PARSE ERROR:', parseError);
+      throw new Error(`Safaricom returned an invalid response (HTTP ${stkRes.status}).`);
     }
 
-    /* SAVE MPESA REQUEST IDS */
-    let update = await db.from('payments').update({ merchant_request_id: sj.MerchantRequestID, checkout_request_id: sj.CheckoutRequestID }).eq('id', ins.data.id);
-    if (update.error) console.error('PAYMENT UPDATE ERROR:', update.error);
+    console.log('STK PUSH RESPONSE:', stkJson);
 
-    /* SUCCESS */
-    return out({ ok: true, payment_id: ins.data.id, message: 'M-Pesa payment prompt sent.' });
+    if (!stkRes.ok || stkJson.ResponseCode !== '0') {
+      await db.from('payments').update({ status: 'failed' }).eq('id', payment.id);
+      throw new Error(
+        stkJson.errorMessage ||
+        stkJson.ResponseDescription ||
+        stkJson.errorCode ||
+        `STK Push failed (HTTP ${stkRes.status})`
+      );
+    }
 
+    // --- Save M-Pesa request IDs ---
+    const { error: updateError } = await db
+      .from('payments')
+      .update({
+        merchant_request_id: stkJson.MerchantRequestID,
+        checkout_request_id: stkJson.CheckoutRequestID,
+      })
+      .eq('id', payment.id);
+
+    if (updateError) console.error('PAYMENT UPDATE ERROR:', updateError);
+
+    return json({ ok: true, payment_id: payment.id, message: 'M-Pesa payment prompt sent.' });
   } catch (e) {
     console.error('MPESA STK PUSH ERROR:', e);
-    return out({ ok: false, message: e?.message || 'Payment error' }, 500);
+    return fail(e?.message || 'Payment error', 500);
   }
 });
