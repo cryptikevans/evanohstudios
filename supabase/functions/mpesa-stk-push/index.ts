@@ -116,13 +116,64 @@ Deno.serve(async r => {
     console.log('STK PUSH CONFIG:', { environment: env, transactionType, shortcode, amount, phone: p, event_id, quantity });
 
     /* SEND STK PUSH */
-    let sr = await fetch(`${base}/mpesa/stkpush/v1/processrequest`, { method: 'POST', headers: { Authorization: `Bearer ${aj.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    let sj = await sr.json();
+    let sr = await fetch(
+  `${base}/mpesa/stkpush/v1/processrequest`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${aj.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  }
+);
 
-    console.log('STK PUSH RESPONSE:', sj);
+/*
+  Read the response as text first.
+  This prevents "Unexpected end of JSON input"
+  when Safaricom returns an empty/non-JSON response.
+*/
+const rawResponse = await sr.text();
 
-    /* HANDLE FAILURE */
-    if (!sr.ok || sj.ResponseCode !== '0') {
+console.log('STK HTTP STATUS:', sr.status);
+console.log('STK RAW RESPONSE:', rawResponse);
+
+let sj: any = {};
+
+try {
+  sj = rawResponse
+    ? JSON.parse(rawResponse)
+    : {};
+} catch (parseError) {
+  console.error(
+    'STK RESPONSE JSON PARSE ERROR:',
+    parseError
+  );
+
+  throw Error(
+    `Safaricom returned an invalid response (HTTP ${sr.status}).`
+  );
+}
+
+console.log('STK PUSH RESPONSE:', sj);
+
+/* HANDLE FAILURE */
+if (!sr.ok || sj.ResponseCode !== '0') {
+
+  await db
+    .from('payments')
+    .update({
+      status: 'failed'
+    })
+    .eq('id', ins.data.id);
+
+  throw Error(
+    sj.errorMessage ||
+    sj.ResponseDescription ||
+    sj.errorCode ||
+    `STK Push failed (HTTP ${sr.status})`
+  );
+}
       await db.from('payments').update({ status: 'failed' }).eq('id', ins.data.id);
       throw Error(sj.errorMessage || sj.ResponseDescription || 'STK Push failed');
     }
